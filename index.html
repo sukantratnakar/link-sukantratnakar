@@ -1,0 +1,574 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<meta name="referrer" content="no-referrer">
+<title>Systovation Outreach — Private Dashboard</title>
+<style>
+  :root{
+    --bg:#f6f7fb; --card:#ffffff; --ink:#1a2540; --muted:#6b7488;
+    --line:#e3e7f1; --accent:#1f4e78; --accent-2:#2e75b6;
+    --ok:#2f7d3b; --warn:#b8871a; --bad:#b14a3d; --tint:#fff7dc;
+    --tint-bad:#ffe3de; --tint-ok:#e2efda;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+       font:14px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}
+
+  /* Gate */
+  #gate{position:fixed;inset:0;background:linear-gradient(160deg,#1f4e78,#0f2a44);
+        display:flex;align-items:center;justify-content:center;z-index:9999;color:#fff}
+  #gate .box{background:#ffffff12;border:1px solid #ffffff22;border-radius:14px;
+             padding:28px 30px;max-width:380px;width:92%;backdrop-filter: blur(6px)}
+  #gate h1{margin:0 0 6px;font-size:18px;font-weight:600;letter-spacing:.2px}
+  #gate p{margin:0 0 18px;font-size:13px;opacity:.85;line-height:1.5}
+  #gate label{font-size:12px;opacity:.8;display:block;margin-bottom:6px}
+  #gate input{width:100%;padding:10px 12px;border:1px solid #ffffff33;border-radius:8px;
+              background:#ffffff14;color:#fff;font:inherit;outline:none}
+  #gate input:focus{border-color:#ffffff88;background:#ffffff1e}
+  #gate button{margin-top:12px;width:100%;padding:10px 12px;border-radius:8px;border:none;
+               background:#fff;color:#1f4e78;font:inherit;font-weight:600;cursor:pointer}
+  #gate button:hover{background:#f2f6fc}
+  #gate .err{margin-top:10px;font-size:12px;color:#ffc9bf;min-height:16px}
+  #gate .foot{margin-top:16px;font-size:11px;opacity:.6}
+
+  header{background:var(--accent);color:#fff;padding:14px 20px;
+         display:flex;justify-content:space-between;align-items:center;gap:12px;
+         border-bottom:1px solid #143356}
+  header h1{margin:0;font-size:17px;font-weight:600;letter-spacing:.2px}
+  header .meta{font-size:12px;opacity:.85}
+  .controls{display:flex;align-items:center;gap:10px}
+  .btn{background:#ffffff22;color:#fff;padding:7px 12px;border-radius:6px;
+       cursor:pointer;font-size:13px;border:1px solid #ffffff33;transition:.15s}
+  .btn:hover{background:#ffffff33}
+  #file-status{font-size:12px;opacity:.85}
+  main{padding:20px;max-width:1400px;margin:0 auto}
+  .empty{padding:60px 20px;text-align:center;color:var(--muted)}
+  .empty h2{color:var(--ink);margin:0 0 8px}
+
+  .kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:16px}
+  .kpi{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:14px 16px}
+  .kpi .label{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px}
+  .kpi .value{font-size:28px;font-weight:700;margin-top:4px}
+  .kpi .sub{font-size:11px;color:var(--muted);margin-top:2px}
+
+  .section-title{font-size:13px;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);
+                 margin:18px 0 8px;font-weight:600}
+  .alerts{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:6px}
+  .alert{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:12px 14px;
+         cursor:pointer;transition:.15s;user-select:none}
+  .alert:hover{border-color:var(--accent-2);transform:translateY(-1px)}
+  .alert.warn{background:var(--tint)}
+  .alert.ok{background:var(--tint-ok)}
+  .alert .label{font-size:12px;color:var(--muted)}
+  .alert .value{font-size:22px;font-weight:700;margin-top:2px}
+  .alert .names{font-size:11px;color:var(--muted);margin-top:4px;line-height:1.3;
+                overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+  .alert.active{border-color:var(--accent);box-shadow:0 0 0 2px #1f4e7822}
+
+  .charts{display:grid;grid-template-columns:2fr 1fr;gap:12px;margin-top:14px}
+  .chart-card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:14px}
+  .chart-card h3{margin:0 0 8px;font-size:13px;color:var(--muted);
+                 text-transform:uppercase;letter-spacing:.5px;font-weight:600}
+  .chart-wrap{position:relative;height:240px}
+
+  .filters{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:16px}
+  .filters input[type=search], .filters select{
+    padding:7px 10px;border:1px solid var(--line);border-radius:6px;background:#fff;font:inherit;color:inherit}
+  .filters input[type=search]{min-width:260px}
+  .filters label{font-size:13px;color:var(--muted);display:flex;align-items:center;gap:6px}
+  .table-card{background:var(--card);border:1px solid var(--line);border-radius:10px;
+              margin-top:10px;overflow:hidden}
+  table{width:100%;border-collapse:collapse;font-size:13px}
+  thead th{background:#f0f3f9;text-align:left;padding:10px 12px;font-weight:600;
+           color:var(--muted);text-transform:uppercase;font-size:11px;letter-spacing:.5px;
+           border-bottom:1px solid var(--line);cursor:pointer;user-select:none;white-space:nowrap}
+  thead th:hover{color:var(--ink)}
+  thead th .caret{opacity:.45;margin-left:4px;font-size:10px}
+  tbody td{padding:10px 12px;border-bottom:1px solid #eef1f7;vertical-align:top}
+  tbody tr:hover{background:#fafbfe;cursor:pointer}
+  tbody tr.needs-action{background:var(--tint)}
+  tbody tr.cold{background:var(--tint-bad)}
+  tbody tr.expanded{background:#f4f7fd}
+  .stage-pill{display:inline-block;padding:2px 8px;border-radius:10px;font-size:11px;
+              font-weight:600;letter-spacing:.3px;background:#eaeef7;color:var(--accent)}
+  .stage-pill.booked{background:#d5e8d4;color:var(--ok)}
+  .stage-pill.archived{background:#e8e8e8;color:#555}
+  .fit-dot{display:inline-block;width:18px;height:18px;border-radius:50%;
+           color:#fff;text-align:center;font-size:11px;font-weight:700;line-height:18px}
+  .fit-5{background:#2f7d3b} .fit-4{background:#6aa04b} .fit-3{background:#b8871a}
+  .fit-2{background:#c96e42} .fit-1{background:#8b8b8b} .fit-u{background:#d0d0d0;color:#666}
+  .detail{padding:12px 16px;background:#f4f7fd;border-top:1px solid var(--line);font-size:13px}
+  .detail .row{margin:4px 0}
+  .detail .tag{display:inline-block;font-size:11px;color:var(--muted);
+               text-transform:uppercase;letter-spacing:.4px;margin-right:6px;min-width:70px}
+  .detail a{color:var(--accent)}
+  .empty-row td{padding:40px;text-align:center;color:var(--muted)}
+  footer{padding:20px;text-align:center;color:var(--muted);font-size:11px}
+
+  @media (max-width: 960px){
+    .kpis,.alerts{grid-template-columns:repeat(2,1fr)}
+    .charts{grid-template-columns:1fr}
+  }
+</style>
+</head>
+<body>
+
+<!-- Password gate -->
+<div id="gate">
+  <div class="box">
+    <h1>Systovation Outreach</h1>
+    <p>Private dashboard. Enter the access code to continue. Your xlsx never leaves this browser; everything renders client-side.</p>
+    <form id="gate-form" autocomplete="off">
+      <label for="pw">Access code</label>
+      <input id="pw" type="password" autofocus>
+      <button type="submit">Unlock</button>
+      <div class="err" id="gate-err"></div>
+    </form>
+    <div class="foot">Session-only access. Close this tab to re-lock.</div>
+  </div>
+</div>
+
+<header hidden id="app-header">
+  <div>
+    <h1>Systovation LinkedIn Outreach — Dashboard</h1>
+    <div class="meta" id="meta-line">Pick your <code>Master_LinkedIn_Contacts.xlsx</code> to begin.</div>
+  </div>
+  <div class="controls">
+    <label for="file-input" class="btn">Load xlsx</label>
+    <input type="file" id="file-input" accept=".xlsx,.xlsm" hidden>
+    <span id="file-status"></span>
+    <button class="btn" id="lock-btn" title="Lock this session">Lock</button>
+  </div>
+</header>
+
+<main hidden id="app-main">
+  <div id="empty-state" class="empty">
+    <h2>No data loaded yet</h2>
+    <p>Click <strong>Load xlsx</strong> above and pick <code>99_System/Master_LinkedIn_Contacts.xlsx</code>.<br>
+    The dashboard reads your file in the browser. Nothing is uploaded.</p>
+  </div>
+
+  <div id="dashboard" hidden>
+    <div class="kpis">
+      <div class="kpi"><div class="label">Total contacts</div><div class="value" id="kpi-total">0</div><div class="sub">All rows in xlsx</div></div>
+      <div class="kpi"><div class="label">Active</div><div class="value" id="kpi-active">0</div><div class="sub">Not archived</div></div>
+      <div class="kpi"><div class="label">Archived</div><div class="value" id="kpi-archived">0</div><div class="sub" id="kpi-archived-sub">0 no-reply / 0 not-fit</div></div>
+      <div class="kpi"><div class="label">Calls booked</div><div class="value" id="kpi-booked">0</div><div class="sub" id="kpi-booked-sub">Cumulative</div></div>
+    </div>
+
+    <div class="section-title">Action Alerts (today)</div>
+    <div class="alerts">
+      <div class="alert warn" data-alert="awaiting"><div class="label">Awaiting reply &gt;5 days</div><div class="value" id="a-awaiting">0</div><div class="names" id="a-awaiting-names">—</div></div>
+      <div class="alert warn" data-alert="cold"><div class="label">Gone cold &gt;7 days</div><div class="value" id="a-cold">0</div><div class="names" id="a-cold-names">—</div></div>
+      <div class="alert ok" data-alert="booked-week"><div class="label">Booked this week</div><div class="value" id="a-booked">0</div><div class="names" id="a-booked-names">—</div></div>
+      <div class="alert warn" data-alert="warm-due"><div class="label">Warm-msg due (&gt;3d after connect)</div><div class="value" id="a-warmdue">0</div><div class="names" id="a-warmdue-names">—</div></div>
+    </div>
+
+    <div class="charts">
+      <div class="chart-card"><h3>Pipeline by stage</h3><div class="chart-wrap"><canvas id="pipeline-chart"></canvas></div></div>
+      <div class="chart-card"><h3>Author-fit distribution</h3><div class="chart-wrap"><canvas id="fit-chart"></canvas></div></div>
+    </div>
+
+    <div class="section-title">Contacts</div>
+    <div class="filters">
+      <input type="search" id="search" placeholder="Search name, company, hook, note…">
+      <select id="stage-filter"><option value="">All stages</option></select>
+      <select id="fit-filter">
+        <option value="">All fit scores</option>
+        <option value="5">5 — strong</option>
+        <option value="4">4 — good</option>
+        <option value="3">3 — possible</option>
+        <option value="2">2 — weak</option>
+        <option value="1">1 — non-candidate</option>
+        <option value="u">Unscored</option>
+      </select>
+      <label><input type="checkbox" id="show-archived"> Include archived</label>
+      <label><input type="checkbox" id="only-action"> Only needs-action</label>
+      <span style="flex:1"></span>
+      <span id="row-count" style="color:var(--muted);font-size:12px"></span>
+    </div>
+
+    <div class="table-card">
+      <table id="contacts-table">
+        <thead><tr>
+          <th data-k="Full Name">Name <span class="caret">↕</span></th>
+          <th data-k="Company">Company <span class="caret">↕</span></th>
+          <th data-k="Stage">Stage <span class="caret">↕</span></th>
+          <th data-k="Last Activity Date">Last activity <span class="caret">↕</span></th>
+          <th data-k="_days">Days <span class="caret">↕</span></th>
+          <th data-k="Author Fit Score">Fit <span class="caret">↕</span></th>
+          <th>Next step</th>
+        </tr></thead>
+        <tbody id="tbody"></tbody>
+      </table>
+    </div>
+  </div>
+</main>
+
+<footer hidden id="app-footer">
+  Data stays in your browser. Refresh by loading the xlsx again after you edit it.
+</footer>
+
+<!-- Gate logic (runs first; only loads the heavy libs after unlock) -->
+<script>
+(function(){
+  // SHA-256 hash of the current access code. Default below is for "systovation2026".
+  // To rotate the code, open a browser console and run:
+  //   crypto.subtle.digest('SHA-256', new TextEncoder().encode('NEW_CODE'))
+  //     .then(b => console.log([...new Uint8Array(b)].map(x=>x.toString(16).padStart(2,'0')).join('')))
+  // Replace the string below with the printed hash, commit, and push.
+  const EXPECTED_HASH = '88930f08b777d2241e8b834073d6534e735f233a8c8ccedf30c2341ef65070f1';
+  const SESSION_KEY = 'systovation_dash_auth_v1';
+
+  const gate = document.getElementById('gate');
+  const form = document.getElementById('gate-form');
+  const pwEl = document.getElementById('pw');
+  const errEl = document.getElementById('gate-err');
+
+  async function sha256Hex(str){
+    const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(str));
+    return [...new Uint8Array(buf)].map(b=>b.toString(16).padStart(2,'0')).join('');
+  }
+
+  function unlock(){
+    gate.style.display = 'none';
+    document.getElementById('app-header').hidden = false;
+    document.getElementById('app-main').hidden = false;
+    document.getElementById('app-footer').hidden = false;
+    loadLibs().then(initApp);
+  }
+
+  function lock(){
+    try { sessionStorage.removeItem(SESSION_KEY); } catch(e){}
+    location.reload();
+  }
+  window.__lock = lock;
+
+  // Auto-unlock if session already authenticated in this tab
+  try {
+    if (sessionStorage.getItem(SESSION_KEY) === EXPECTED_HASH) unlock();
+  } catch(e){ /* sessionStorage may be blocked; require code each load */ }
+
+  form.addEventListener('submit', async (e)=>{
+    e.preventDefault();
+    errEl.textContent = '';
+    const pw = pwEl.value;
+    if (!pw) { errEl.textContent = 'Enter the access code.'; return; }
+    let hash;
+    try { hash = await sha256Hex(pw); }
+    catch { errEl.textContent = 'Browser does not support SubtleCrypto over this connection.'; return; }
+    if (hash === EXPECTED_HASH) {
+      try { sessionStorage.setItem(SESSION_KEY, EXPECTED_HASH); } catch(e){}
+      unlock();
+    } else {
+      errEl.textContent = 'Wrong code.';
+      pwEl.select();
+    }
+  });
+
+  function loadLibs(){
+    return Promise.all([
+      loadScript('https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js'),
+      loadScript('https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js'),
+    ]);
+  }
+  function loadScript(src){
+    return new Promise((res,rej)=>{
+      const s = document.createElement('script');
+      s.src = src; s.onload = res; s.onerror = rej; document.head.appendChild(s);
+    });
+  }
+
+  function initApp(){
+    // Wire up the Lock button
+    document.getElementById('lock-btn').addEventListener('click', window.__lock);
+    // Hand off to the dashboard logic
+    window.__bootDashboard();
+  }
+})();
+</script>
+
+<!-- Dashboard logic (defined but not executed until gate unlocks) -->
+<script>
+window.__bootDashboard = function(){
+
+const STAGES = ['PROSPECT','REQUEST_SENT','CONNECTED','WARM_MSG_SENT','VALUE_TOUCH',
+                'EMAIL_SENT','FOLLOW_UP_SENT','CALL_BOOKED','ARCHIVED'];
+
+let state = {
+  rows: [],
+  filter: {},
+  sort: { key: 'Last Activity Date', dir: 'desc' },
+  charts: {}
+};
+
+document.getElementById('file-input').addEventListener('change', async (e) => {
+  const f = e.target.files[0];
+  if (!f) return;
+  const buf = await f.arrayBuffer();
+  const wb = XLSX.read(buf, { cellDates: true });
+  if (!wb.SheetNames.includes('Contacts')) {
+    alert('No "Contacts" sheet found in that xlsx.'); return;
+  }
+  const sheet = wb.Sheets['Contacts'];
+  let rows = XLSX.utils.sheet_to_json(sheet, { defval: null });
+  rows = rows.filter(r => r['Full Name']);
+  state.rows = rows.map(enrichRow);
+  document.getElementById('file-status').textContent =
+    `${f.name} · ${state.rows.length} contacts`;
+  document.getElementById('empty-state').hidden = true;
+  document.getElementById('dashboard').hidden = false;
+  const now = new Date();
+  document.getElementById('meta-line').textContent =
+    `Loaded ${f.name} · refreshed ${now.toLocaleString()}`;
+  populateStageFilter();
+  render();
+});
+
+function enrichRow(r) {
+  const lad = r['Last Activity Date'];
+  const today = new Date(); today.setHours(0,0,0,0);
+  let days = null;
+  if (lad instanceof Date) {
+    const d = new Date(lad); d.setHours(0,0,0,0);
+    days = Math.round((today - d) / 86400000);
+  }
+  r._days = days;
+  r._lastActivityStr = lad instanceof Date ? fmtDate(lad) : '—';
+  r._active = (r['Archived'] || 'No').toString().toLowerCase() !== 'yes';
+  r._fit = r['Author Fit Score'];
+  r._needsAction = r._active &&
+    ['WARM_MSG_SENT','EMAIL_SENT','FOLLOW_UP_SENT'].includes(r['Stage']) &&
+    days !== null && days > 5;
+  r._cold = r._active && r['Stage'] !== 'CALL_BOOKED' &&
+    days !== null && days > 7;
+  const cbd = r['Call Booked Date'];
+  r._bookedThisWeek = (r['Stage'] === 'CALL_BOOKED') && cbd instanceof Date &&
+    ((today - new Date(cbd.getFullYear(), cbd.getMonth(), cbd.getDate())) / 86400000) <= 7 &&
+    ((today - new Date(cbd.getFullYear(), cbd.getMonth(), cbd.getDate())) / 86400000) >= 0;
+  const cad = r['Connection Accepted Date'];
+  r._warmDue = r._active && r['Stage'] === 'CONNECTED' && cad instanceof Date &&
+    ((today - new Date(cad.getFullYear(), cad.getMonth(), cad.getDate())) / 86400000) > 3;
+  return r;
+}
+
+function fmtDate(d){
+  if(!(d instanceof Date)) return '—';
+  return d.toISOString().slice(0,10);
+}
+
+function render() {
+  const rows = state.rows;
+  renderKPIs(rows);
+  renderAlerts(rows);
+  renderCharts(rows);
+  renderTable();
+}
+
+function renderKPIs(rows){
+  const total = rows.length;
+  const active = rows.filter(r=>r._active).length;
+  const archived = rows.filter(r=>!r._active).length;
+  const booked = rows.filter(r=>r['Stage']==='CALL_BOOKED').length;
+  document.getElementById('kpi-total').textContent = total;
+  document.getElementById('kpi-active').textContent = active;
+  document.getElementById('kpi-archived').textContent = archived;
+  document.getElementById('kpi-booked').textContent = booked;
+  const noReply = rows.filter(r => r['Archive Reason']==='no-reply').length;
+  const notFit  = rows.filter(r => r['Archive Reason']==='not-fit').length;
+  document.getElementById('kpi-archived-sub').textContent =
+    archived ? `${noReply} no-reply · ${notFit} not-fit` : '—';
+}
+
+function renderAlerts(rows){
+  const awaiting  = rows.filter(r=>r._needsAction && !r._cold);
+  const cold      = rows.filter(r=>r._cold);
+  const booked    = rows.filter(r=>r._bookedThisWeek);
+  const warmDue   = rows.filter(r=>r._warmDue);
+  setAlert('awaiting', awaiting);
+  setAlert('cold', cold);
+  setAlert('booked', booked);
+  setAlert('warmdue', warmDue);
+}
+function setAlert(id, list){
+  document.getElementById('a-'+id).textContent = list.length;
+  document.getElementById('a-'+id+'-names').textContent =
+    list.length ? list.map(r=>r['Full Name']).join(', ') : '—';
+}
+
+function renderCharts(rows){
+  const counts = STAGES.map(s => rows.filter(r=>r['Stage']===s).length);
+  const ctx1 = document.getElementById('pipeline-chart').getContext('2d');
+  if (state.charts.pipe) state.charts.pipe.destroy();
+  state.charts.pipe = new Chart(ctx1, {
+    type: 'bar',
+    data: { labels: STAGES, datasets: [{ data: counts, backgroundColor:
+      STAGES.map(s=> s==='CALL_BOOKED'?'#2f7d3b': s==='ARCHIVED'?'#999':'#2e75b6') }] },
+    options: { plugins:{legend:{display:false}},
+               scales:{y:{beginAtZero:true,ticks:{precision:0}}},
+               maintainAspectRatio:false }
+  });
+
+  const fits = [5,4,3,2,1];
+  const fitCounts = fits.map(f => rows.filter(r=>r._active && Number(r._fit)===f).length);
+  const unscored = rows.filter(r=>r._active && (r._fit==null || r._fit==='')).length;
+  const ctx2 = document.getElementById('fit-chart').getContext('2d');
+  if (state.charts.fit) state.charts.fit.destroy();
+  state.charts.fit = new Chart(ctx2, {
+    type: 'doughnut',
+    data: { labels: ['5 strong','4 good','3 possible','2 weak','1 non-cand','Unscored'],
+            datasets: [{ data: [...fitCounts, unscored],
+              backgroundColor: ['#2f7d3b','#6aa04b','#b8871a','#c96e42','#8b8b8b','#d0d0d0'] }] },
+    options: { plugins:{legend:{position:'bottom',labels:{boxWidth:10,font:{size:11}}}},
+               maintainAspectRatio:false, cutout:'55%' }
+  });
+}
+
+function populateStageFilter(){
+  const sel = document.getElementById('stage-filter');
+  while (sel.options.length > 1) sel.remove(1);
+  STAGES.forEach(s => {
+    const o = document.createElement('option'); o.value=s; o.textContent=s; sel.appendChild(o);
+  });
+}
+
+function renderTable(){
+  const tbody = document.getElementById('tbody');
+  tbody.innerHTML = '';
+  const q = (document.getElementById('search').value||'').toLowerCase().trim();
+  const stageF = document.getElementById('stage-filter').value;
+  const fitF = document.getElementById('fit-filter').value;
+  const showArch = document.getElementById('show-archived').checked;
+  const onlyAction = document.getElementById('only-action').checked;
+  const alertF = state.filter.alert;
+
+  let rows = state.rows.filter(r => {
+    if (!showArch && !r._active) return false;
+    if (stageF && r['Stage'] !== stageF) return false;
+    if (fitF === 'u' && (r._fit!=null && r._fit!=='')) return false;
+    if (fitF && fitF!=='u' && Number(r._fit) !== Number(fitF)) return false;
+    if (onlyAction && !(r._needsAction || r._cold || r._warmDue)) return false;
+    if (alertF === 'awaiting' && !(r._needsAction && !r._cold)) return false;
+    if (alertF === 'cold' && !r._cold) return false;
+    if (alertF === 'booked-week' && !r._bookedThisWeek) return false;
+    if (alertF === 'warm-due' && !r._warmDue) return false;
+    if (q) {
+      const blob = [r['Full Name'],r['Company'],r['Headline'],r['Hooks'],
+                    r['Relevance Notes'],r['Notes'],r['Location'],r['Stage']]
+                    .filter(Boolean).join(' ').toLowerCase();
+      if (!blob.includes(q)) return false;
+    }
+    return true;
+  });
+
+  const k = state.sort.key, dir = state.sort.dir === 'asc' ? 1 : -1;
+  rows.sort((a,b)=>{
+    const av = a[k], bv = b[k];
+    if (av==null && bv==null) return 0;
+    if (av==null) return 1;
+    if (bv==null) return -1;
+    if (av instanceof Date && bv instanceof Date) return (av - bv) * dir;
+    if (typeof av === 'number' && typeof bv === 'number') return (av - bv) * dir;
+    return String(av).localeCompare(String(bv)) * dir;
+  });
+
+  document.getElementById('row-count').textContent =
+    `${rows.length} of ${state.rows.length}${alertF ? ' · alert filter on' : ''}`;
+
+  if (!rows.length) {
+    tbody.innerHTML = '<tr class="empty-row"><td colspan="7">No contacts match these filters.</td></tr>';
+    return;
+  }
+
+  rows.forEach((r)=>{
+    const tr = document.createElement('tr');
+    tr.dataset.idx = state.rows.indexOf(r);
+    if (r._cold) tr.classList.add('cold');
+    else if (r._needsAction) tr.classList.add('needs-action');
+    const stageClass = r['Stage']==='CALL_BOOKED'?'booked': r['Stage']==='ARCHIVED'?'archived':'';
+    const fitClass = r._fit ? `fit-${r._fit}` : 'fit-u';
+    const fitLabel = r._fit || '?';
+    tr.innerHTML = `
+      <td><strong>${esc(r['Full Name']||'—')}</strong><div style="color:var(--muted);font-size:11px">${esc(r['Headline']||'')}</div></td>
+      <td>${esc(r['Company']||'—')}<div style="color:var(--muted);font-size:11px">${esc(r['Location']||'')}</div></td>
+      <td><span class="stage-pill ${stageClass}">${esc(r['Stage']||'—')}</span></td>
+      <td>${r._lastActivityStr}</td>
+      <td>${r._days==null?'—':r._days+'d'}</td>
+      <td><span class="fit-dot ${fitClass}">${fitLabel}</span></td>
+      <td style="max-width:260px;color:var(--muted)">${esc(nextStep(r))}</td>
+    `;
+    tr.addEventListener('click', () => toggleDetail(tr, r));
+    tbody.appendChild(tr);
+  });
+}
+
+function nextStep(r){
+  if (!r._active) return `Archived${r['Archive Reason']?' · '+r['Archive Reason']:''}`;
+  if (r._cold) return 'Cold — nudge or archive';
+  if (r._needsAction) return 'Reply overdue — follow up';
+  if (r._warmDue) return 'Send warm message';
+  if (r['Stage']==='CALL_BOOKED') return 'Call booked — prep brief';
+  if (r['Stage']==='PROSPECT') return 'Send connection request';
+  if (r['Stage']==='REQUEST_SENT') return 'Awaiting accept';
+  if (r['Stage']==='CONNECTED') return 'Draft warm message';
+  if (r['Stage']==='WARM_MSG_SENT') return 'Waiting on reply';
+  if (r['Stage']==='EMAIL_SENT') return 'Waiting on reply (email)';
+  return '—';
+}
+
+function toggleDetail(tr, r){
+  const nxt = tr.nextElementSibling;
+  if (nxt && nxt.classList.contains('detail-row')) {
+    nxt.remove(); tr.classList.remove('expanded'); return;
+  }
+  tr.classList.add('expanded');
+  const row = document.createElement('tr');
+  row.className = 'detail-row';
+  const linkedIn = r['LinkedIn URL'] ? `<a href="${esc(r['LinkedIn URL'])}" target="_blank" rel="noopener">LinkedIn →</a>` : '';
+  const email = r['Email'] ? `<a href="mailto:${esc(r['Email'])}">${esc(r['Email'])}</a>` : '—';
+  row.innerHTML = `<td colspan="7" class="detail">
+    <div class="row"><span class="tag">Hooks</span>${esc(r['Hooks']||'—')}</div>
+    <div class="row"><span class="tag">Relevance</span>${esc(r['Relevance Notes']||'—')}</div>
+    <div class="row"><span class="tag">Notes</span>${esc(r['Notes']||'—')}</div>
+    <div class="row"><span class="tag">Email</span>${email}
+      &nbsp;&nbsp;<span class="tag">Profile</span>${linkedIn || '—'}
+      &nbsp;&nbsp;<span class="tag">File</span>${esc(r['Contact File']||'—')}</div>
+    <div class="row" style="color:var(--muted);font-size:12px">
+      Connected ${fmtDateMaybe(r['Connection Accepted Date'])} · Warm msg ${fmtDateMaybe(r['Warm Message Date'])} ·
+      Email sent ${fmtDateMaybe(r['Email Sent Date'])} · Follow-up ${fmtDateMaybe(r['Follow-Up Date'])} ·
+      Call booked ${fmtDateMaybe(r['Call Booked Date'])}
+    </div>
+  </td>`;
+  tr.after(row);
+}
+function fmtDateMaybe(d){ return d instanceof Date ? fmtDate(d) : '—'; }
+function esc(s){ return (s==null?'':String(s)).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+
+['search','stage-filter','fit-filter','show-archived','only-action'].forEach(id=>{
+  document.getElementById(id).addEventListener('input', renderTable);
+});
+document.querySelectorAll('thead th[data-k]').forEach(th=>{
+  th.addEventListener('click', ()=>{
+    const k = th.dataset.k;
+    state.sort.dir = (state.sort.key === k && state.sort.dir === 'desc') ? 'asc' : 'desc';
+    state.sort.key = k;
+    renderTable();
+  });
+});
+document.querySelectorAll('.alert').forEach(a=>{
+  a.addEventListener('click', ()=>{
+    const which = a.dataset.alert;
+    document.querySelectorAll('.alert').forEach(x=>x.classList.remove('active'));
+    if (state.filter.alert === which) { state.filter.alert = null; }
+    else { state.filter.alert = which; a.classList.add('active'); }
+    renderTable();
+  });
+});
+
+}; // end __bootDashboard
+</script>
+</body>
+</html>
