@@ -41,8 +41,10 @@
   header .meta{font-size:12px;opacity:.85}
   .controls{display:flex;align-items:center;gap:10px}
   .btn{background:#ffffff22;color:#fff;padding:7px 12px;border-radius:6px;
-       cursor:pointer;font-size:13px;border:1px solid #ffffff33;transition:.15s}
-  .btn:hover{background:#ffffff33}
+       cursor:pointer;font-size:13px;border:1px solid #ffffff33;transition:.15s;
+       text-decoration:none;display:inline-block}
+  .btn:hover{background:#ffffff33;color:#fff}
+  a.btn:visited{color:#fff}
   #file-status{font-size:12px;opacity:.85}
   main{padding:20px;max-width:1400px;margin:0 auto}
   .empty{padding:60px 20px;text-align:center;color:var(--muted)}
@@ -137,6 +139,7 @@
     <div class="meta" id="meta-line">Pick your <code>Master_LinkedIn_Contacts.xlsx</code> to begin.</div>
   </div>
   <div class="controls">
+    <a class="btn" href="./contacts.html" title="Open the 579-contact review + action tool">Contact Review</a>
     <label for="file-input" class="btn">Load xlsx</label>
     <input type="file" id="file-input" accept=".xlsx,.xlsm" hidden>
     <span id="file-status"></span>
