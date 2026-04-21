@@ -28,6 +28,8 @@
   #gate input{width:100%;padding:10px 12px;border:1px solid #ffffff33;border-radius:8px;
               background:#ffffff14;color:#fff;font:inherit;outline:none}
   #gate input:focus{border-color:#ffffff88;background:#ffffff1e}
+  #gate input[type=checkbox]{width:auto;padding:0;margin:0;accent-color:#fff;cursor:pointer}
+  #gate .remember{display:flex;align-items:center;gap:8px;margin-top:12px;font-size:12px;opacity:.9;cursor:pointer;user-select:none}
   #gate button{margin-top:12px;width:100%;padding:10px 12px;border-radius:8px;border:none;
                background:#fff;color:#1f4e78;font:inherit;font-weight:600;cursor:pointer}
   #gate button:hover{background:#f2f6fc}
@@ -126,10 +128,14 @@
     <form id="gate-form" autocomplete="off">
       <label for="pw">Access code</label>
       <input id="pw" type="password" autofocus>
+      <label class="remember" for="remember-me">
+        <input id="remember-me" type="checkbox" checked>
+        Remember this device
+      </label>
       <button type="submit">Unlock</button>
       <div class="err" id="gate-err"></div>
     </form>
-    <div class="foot">Session-only access. Close this tab to re-lock.</div>
+    <div class="foot">Remembered devices stay unlocked until you click Lock. Use on trusted devices only.</div>
   </div>
 </div>
 
@@ -225,11 +231,13 @@
   // Replace the string below with the printed hash, commit, and push.
   const EXPECTED_HASH = '88930f08b777d2241e8b834073d6534e735f233a8c8ccedf30c2341ef65070f1';
   const SESSION_KEY = 'systovation_dash_auth_v1';
+  const DEVICE_KEY  = 'linkedin_crm_device_v1';
 
   const gate = document.getElementById('gate');
   const form = document.getElementById('gate-form');
   const pwEl = document.getElementById('pw');
   const errEl = document.getElementById('gate-err');
+  const rememberEl = document.getElementById('remember-me');
 
   async function sha256Hex(str){
     const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(str));
@@ -246,14 +254,16 @@
 
   function lock(){
     try { sessionStorage.removeItem(SESSION_KEY); } catch(e){}
+    try { localStorage.removeItem(DEVICE_KEY); } catch(e){}
     location.reload();
   }
   window.__lock = lock;
 
-  // Auto-unlock if session already authenticated in this tab
+  // Auto-unlock: trusted device (persistent) takes precedence, then session
   try {
-    if (sessionStorage.getItem(SESSION_KEY) === EXPECTED_HASH) unlock();
-  } catch(e){ /* sessionStorage may be blocked; require code each load */ }
+    if (localStorage.getItem(DEVICE_KEY) === EXPECTED_HASH) unlock();
+    else if (sessionStorage.getItem(SESSION_KEY) === EXPECTED_HASH) unlock();
+  } catch(e){ /* storage may be blocked; require code each load */ }
 
   form.addEventListener('submit', async (e)=>{
     e.preventDefault();
@@ -265,6 +275,9 @@
     catch { errEl.textContent = 'Browser does not support SubtleCrypto over this connection.'; return; }
     if (hash === EXPECTED_HASH) {
       try { sessionStorage.setItem(SESSION_KEY, EXPECTED_HASH); } catch(e){}
+      if (rememberEl && rememberEl.checked) {
+        try { localStorage.setItem(DEVICE_KEY, EXPECTED_HASH); } catch(e){}
+      }
       unlock();
     } else {
       errEl.textContent = 'Wrong code.';
