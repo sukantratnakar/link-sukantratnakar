@@ -101,6 +101,39 @@
   .batch-tag:hover { color: #fff; background: #3a5068; }
   .batch-tag .tx { color: var(--danger); margin-left: 4px; }
 
+  /* Alphabetical letter jump strip */
+  .alpha-strip { display: flex; gap: 2px; padding: 4px 20px; background: var(--panel-2);
+                 border-bottom: 1px solid var(--border); flex-wrap: wrap; align-items: center;
+                 font-size: 11px; }
+  .alpha-strip:empty { display: none; }
+  .alpha-label { color: var(--muted); margin-right: 6px; text-transform: uppercase; letter-spacing: 0.5px; }
+  .alpha-btn  { padding: 2px 7px; border-radius: 3px; background: var(--bg);
+                border: 1px solid var(--border); cursor: pointer; color: var(--muted);
+                user-select: none; font-family: monospace; font-weight: 600; min-width: 18px; text-align: center; }
+  .alpha-btn:hover:not(.empty) { color: var(--fg); background: var(--panel); }
+  .alpha-btn.on   { color: var(--accent-fg); background: var(--accent); border-color: var(--accent); }
+  .alpha-btn.empty { opacity: 0.3; cursor: default; }
+
+  /* Preset row */
+  .preset-row { display: flex; gap: 6px; padding: 5px 20px; background: var(--panel-2);
+                border-bottom: 1px solid var(--border); flex-wrap: wrap; align-items: center;
+                font-size: 11px; }
+  .preset-label { color: var(--muted); margin-right: 4px; text-transform: uppercase; letter-spacing: 0.5px; }
+  #preset-pills { display: inline-flex; flex-wrap: wrap; gap: 4px; }
+  #preset-pills:empty::before { content: '(no saved presets yet)'; color: var(--muted); opacity: 0.6; }
+  .preset-pill { padding: 3px 8px; border-radius: 10px; background: var(--bg); border: 1px solid #4a5a6e;
+                 cursor: pointer; color: #9fb1c5; display: inline-flex; align-items: center; gap: 4px; }
+  .preset-pill.on { color: var(--accent-fg); background: var(--accent); border-color: var(--accent); font-weight: 600; }
+  .preset-pill .px { color: var(--danger); margin-left: 2px; opacity: 0.5; font-weight: 700; }
+  .preset-pill .px:hover { opacity: 1; }
+  .preset-row button { padding: 2px 8px; font-size: 11px; }
+
+  /* City cell input */
+  .city-cell .city-input { background: var(--bg); color: var(--fg); border: 1px solid var(--border);
+                           padding: 3px 6px; border-radius: 3px; font-size: 11px; font-family: inherit;
+                           width: 110px; }
+  .city-cell .city-input:focus { border-color: var(--accent); outline: none; }
+
   .legend { padding: 6px 20px; background: var(--panel-2); border-bottom: 1px solid var(--border);
             font-size: 11px; color: var(--muted); }
   .legend kbd { background: var(--bg); border: 1px solid var(--border); border-radius: 3px;
@@ -395,6 +428,10 @@
         <option value="cold">Cold (&gt;90d)</option>
         <option value="never">Never contacted</option>
       </select></label>
+      <label>City <input type="text" id="filter-city" list="city-list" placeholder="any" style="width:120px"></label>
+      <datalist id="city-list"></datalist>
+      <label>Last met <input type="date" id="filter-date-from" title="From date" style="width:135px"></label>
+      <label>to <input type="date" id="filter-date-to" title="To date" style="width:135px"></label>
       <label><input type="checkbox" id="filter-changed"> Changed only</label>
       <label><input type="checkbox" id="filter-selected"> Selected only</label>
       <label><input type="checkbox" id="filter-dupes"> Dupes only</label>
@@ -414,6 +451,15 @@
     <div class="bucket-pills" id="bucket-pills"></div>
 
     <div class="batch-pills" id="batch-pills"></div>
+
+    <div class="alpha-strip" id="alpha-strip"></div>
+
+    <div class="preset-row" id="preset-row">
+      <span class="preset-label">Presets &rarr;</span>
+      <span id="preset-pills"></span>
+      <button id="preset-save" class="secondary" title="Save the current filters as a named preset">Save preset&hellip;</button>
+      <button id="preset-clear" class="secondary" title="Clear all filters (search, bucket, city, date, alpha, etc.)">Clear all filters</button>
+    </div>
 
     <div class="legend">
       <kbd>j</kbd>/<kbd>k</kbd> move &middot;
@@ -444,6 +490,7 @@
       <th data-sort="emails">Contact</th>
       <th class="mtg" data-sort="meeting_count">Mtgs</th>
       <th data-sort="last_meeting_date">Last met</th>
+      <th data-sort="city">City</th>
       <th class="no-sort">Cadence</th>
       <th data-sort="stage">Stage</th>
       <th class="no-sort">Status</th>
@@ -819,6 +866,7 @@ function isChanged(row) {
     || 'last_activity_date' in o
     || 'display_name' in o || 'li_status' in o
     || 'merged_into' in o || 'meeting_count' in o || 'suggest_status' in o
+    || 'city' in o
     || ('batches' in o && o.batches && o.batches.length);
 }
 function isArchived(row) {
@@ -828,6 +876,7 @@ function isArchived(row) {
 /* Editable helpers — read the overridden value if set, otherwise fall back to the
  * data the CSV provided. Use these everywhere instead of r.display_name / r.meeting_count. */
 function displayName(row)  { return getField(row, 'display_name') || row.display_name || ''; }
+function cityOf(row)       { return (getField(row, 'city') || row.city || '').trim(); }
 function meetingCount(row) {
   const ovv = ov(row).meeting_count;
   if (ovv !== undefined && ovv !== '') {
@@ -916,6 +965,11 @@ let state = {
   dupesOnly: false,
   dupeCluster: null,   /* when set, filter to a single cluster_id */
   batch: '',           /* when set, only show rows tagged with this batch */
+  city: '',            /* substring match on city override field */
+  alpha: '',           /* single letter A-Z; filters displayName by first letter */
+  dateFrom: '',        /* YYYY-MM-DD; filters last_meeting_date >= dateFrom */
+  dateTo: '',          /* YYYY-MM-DD; filters last_meeting_date <= dateTo */
+  activePreset: '',    /* currently loaded preset name, blank if none */
   showMerged: false,
   sortKey: 'bucket',
   sortDesc: false,
@@ -1037,6 +1091,153 @@ function renderBatchPills() {
 }
 
 /* ------------------------------------------------------------------
+ * City list + alpha strip + saved presets
+ * ------------------------------------------------------------------ */
+function refreshCityList() {
+  const dl = document.getElementById('city-list');
+  if (!dl) return;
+  const set = new Set();
+  DATA.forEach(r => {
+    if (isMerged(r) && !state.showMerged) return;
+    const c = cityOf(r);
+    if (c) set.add(c);
+  });
+  const cities = [...set].sort((a, b) => a.localeCompare(b));
+  dl.innerHTML = cities.map(c => '<option value="' + escHtml(c) + '">').join('');
+}
+
+function renderAlphaStrip() {
+  const bar = document.getElementById('alpha-strip');
+  if (!bar) return;
+  bar.innerHTML = '';
+  const label = document.createElement('span');
+  label.className = 'alpha-label';
+  label.textContent = 'A\u2013Z \u2192';
+  bar.appendChild(label);
+
+  /* Count how many visible-candidate rows start with each letter (respects other filters EXCEPT alpha itself) */
+  const counts = {};
+  const prevAlpha = state.alpha;
+  state.alpha = '';
+  const pool = filtered();
+  state.alpha = prevAlpha;
+  pool.forEach(r => {
+    const nm = displayName(r).trim();
+    if (!nm) return;
+    const ch = nm[0].toUpperCase();
+    if (ch >= 'A' && ch <= 'Z') counts[ch] = (counts[ch] || 0) + 1;
+  });
+
+  const allBtn = document.createElement('span');
+  allBtn.className = 'alpha-btn' + (state.alpha === '' ? ' on' : '');
+  allBtn.textContent = 'all';
+  allBtn.onclick = () => { state.alpha = ''; render(); };
+  bar.appendChild(allBtn);
+
+  for (let i = 0; i < 26; i++) {
+    const ch = String.fromCharCode(65 + i);
+    const n = counts[ch] || 0;
+    const b = document.createElement('span');
+    b.className = 'alpha-btn' + (state.alpha === ch ? ' on' : '') + (n === 0 ? ' empty' : '');
+    b.textContent = ch;
+    b.title = n + ' name' + (n === 1 ? '' : 's') + ' starting with ' + ch;
+    if (n > 0) b.onclick = () => { state.alpha = (state.alpha === ch ? '' : ch); render(); };
+    bar.appendChild(b);
+  }
+}
+
+/* Saved filter presets — stored in localStorage under LS_PRESETS.
+ * Schema:  [ { name: 'Calgary warm', state: {...filter-only fields...} }, ... ] */
+const LS_PRESETS = 'systovation_filter_presets_v1';
+let savedPresets = [];
+try {
+  const raw = localStorage.getItem(LS_PRESETS);
+  if (raw) savedPresets = JSON.parse(raw) || [];
+  if (!Array.isArray(savedPresets)) savedPresets = [];
+} catch (e) { savedPresets = []; }
+
+function savePresets() {
+  localStorage.setItem(LS_PRESETS, JSON.stringify(savedPresets));
+}
+
+const PRESET_FIELDS = ['search','bucket','tier','minMtg','cadence','changedOnly','selectedOnly',
+                       'dupesOnly','dupeCluster','batch','city','alpha','dateFrom','dateTo','showMerged',
+                       'sortKey','sortDesc'];
+
+function snapshotFilters() {
+  const snap = {};
+  PRESET_FIELDS.forEach(k => { snap[k] = state[k]; });
+  return snap;
+}
+
+function applyPreset(name) {
+  const p = savedPresets.find(x => x.name === name);
+  if (!p) return;
+  PRESET_FIELDS.forEach(k => {
+    if (k in p.state) state[k] = p.state[k];
+  });
+  state.activePreset = name;
+  /* Sync the UI inputs that the user controls directly */
+  const ids = { search: 'search', tier: 'filter-tier', cadence: 'filter-cadence',
+                city: 'filter-city', dateFrom: 'filter-date-from', dateTo: 'filter-date-to' };
+  Object.entries(ids).forEach(([k, id]) => {
+    const el = document.getElementById(id);
+    if (el) el.value = state[k] || '';
+  });
+  const min = document.getElementById('filter-minmtg');
+  if (min) min.value = state.minMtg || '';
+  ['filter-changed','filter-selected','filter-dupes','filter-show-merged'].forEach((id, idx) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.checked = !!state[['changedOnly','selectedOnly','dupesOnly','showMerged'][idx]];
+  });
+  render();
+}
+
+function clearAllFilters() {
+  state.search = ''; state.bucket = ''; state.tier = ''; state.minMtg = 0;
+  state.cadence = ''; state.changedOnly = false; state.selectedOnly = false;
+  state.dupesOnly = false; state.dupeCluster = null; state.batch = '';
+  state.city = ''; state.alpha = ''; state.dateFrom = ''; state.dateTo = '';
+  state.activePreset = '';
+  ['search','filter-tier','filter-cadence','filter-city','filter-date-from','filter-date-to']
+    .forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+  const min = document.getElementById('filter-minmtg'); if (min) min.value = '';
+  ['filter-changed','filter-selected','filter-dupes','filter-show-merged']
+    .forEach(id => { const el = document.getElementById(id); if (el) el.checked = false; });
+  render();
+}
+
+function renderPresetPills() {
+  const bar = document.getElementById('preset-pills');
+  if (!bar) return;
+  bar.innerHTML = '';
+  savedPresets.forEach(p => {
+    const el = document.createElement('span');
+    el.className = 'preset-pill' + (state.activePreset === p.name ? ' on' : '');
+    el.innerHTML = '<span>' + escHtml(p.name) + '</span>';
+    el.onclick = (e) => {
+      if (e.target.classList.contains('px')) return;
+      applyPreset(p.name);
+    };
+    const x = document.createElement('span');
+    x.className = 'px';
+    x.textContent = '\u2715';
+    x.title = 'Delete this preset';
+    x.onclick = (e) => {
+      e.stopPropagation();
+      if (!confirm('Delete preset "' + p.name + '"?')) return;
+      savedPresets = savedPresets.filter(q => q.name !== p.name);
+      savePresets();
+      if (state.activePreset === p.name) state.activePreset = '';
+      render();
+    };
+    el.appendChild(x);
+    bar.appendChild(el);
+  });
+}
+
+/* ------------------------------------------------------------------
  * Filter + sort
  * ------------------------------------------------------------------ */
 function filtered() {
@@ -1053,6 +1254,20 @@ function filtered() {
     if (state.dupesOnly && !DUPE_BY_ROW[String(r._id)]) return false;
     if (state.dupeCluster && (!DUPE_BY_ROW[String(r._id)] || DUPE_BY_ROW[String(r._id)].cluster_id !== state.dupeCluster)) return false;
     if (state.batch && !rowBatches(r).includes(state.batch)) return false;
+    if (state.city) {
+      const c = cityOf(r).toLowerCase();
+      if (!c || !c.includes(state.city.toLowerCase())) return false;
+    }
+    if (state.alpha) {
+      const nm = displayName(r).trim();
+      if (!nm || nm[0].toUpperCase() !== state.alpha) return false;
+    }
+    if (state.dateFrom || state.dateTo) {
+      const lmd = r.last_meeting_date || '';
+      if (!lmd) return false;
+      if (state.dateFrom && lmd < state.dateFrom) return false;
+      if (state.dateTo   && lmd > state.dateTo)   return false;
+    }
     if (state.cadence) {
       const d = daysSince(lastContactDate(r));
       const want = state.cadence;
@@ -1074,6 +1289,7 @@ function sorted(rows) {
   const getter = k === 'bucket' ? (r => getBucket(r))
               : k === 'display_name' ? (r => displayName(r))
               : k === 'meeting_count' ? (r => meetingCount(r))
+              : k === 'city' ? (r => cityOf(r))
               : ['stage','fit_score','hooks','linkedin_url','emails'].includes(k) ? (r => getField(r, k))
               : (r => r[k]);
   return [...rows].sort((a, b) => {
@@ -1104,6 +1320,9 @@ function linkedInMessageUrl(profileUrl) {
 function render() {
   buildPills();
   renderBatchPills();
+  refreshCityList();
+  renderAlphaStrip();
+  renderPresetPills();
   const visible = sorted(filtered());
 
   /* Pill counts (global) — All + every bucket; last pill is "+ New" (skipped). */
@@ -1431,6 +1650,24 @@ function renderRow(r, idx) {
   tdD.className = 'date';
   tdD.textContent = r.last_meeting_date || '';
   tr.appendChild(tdD);
+
+  /* City — editable, stored as override */
+  const tdCity = document.createElement('td');
+  tdCity.className = 'city-cell';
+  const cityIn = document.createElement('input');
+  cityIn.type = 'text';
+  cityIn.className = 'city-input';
+  cityIn.value = cityOf(r);
+  cityIn.placeholder = '-';
+  cityIn.onblur = () => {
+    const v = cityIn.value.trim();
+    setField(r, 'city', v);
+    refreshCityList();
+    render();
+  };
+  cityIn.onclick = (e) => e.stopPropagation();
+  tdCity.appendChild(cityIn);
+  tr.appendChild(tdCity);
 
   /* Cadence chip */
   const tdCad = document.createElement('td');
@@ -1810,6 +2047,27 @@ document.getElementById('dupe-next').onclick = () => {
   render();
 };
 document.getElementById('filter-show-merged').onchange = (e) => { state.showMerged = e.target.checked; render(); };
+document.getElementById('filter-city').oninput       = (e) => { state.city = e.target.value; state.activePreset = ''; render(); };
+document.getElementById('filter-date-from').onchange = (e) => { state.dateFrom = e.target.value; state.activePreset = ''; render(); };
+document.getElementById('filter-date-to').onchange   = (e) => { state.dateTo = e.target.value; state.activePreset = ''; render(); };
+document.getElementById('preset-save').onclick = () => {
+  const name = prompt('Name this preset (e.g. "Calgary warm", "CA fit 4+"):', '');
+  if (!name) return;
+  const clean = name.trim();
+  if (!clean) return;
+  const existing = savedPresets.findIndex(p => p.name === clean);
+  const snap = snapshotFilters();
+  if (existing >= 0) {
+    if (!confirm('Overwrite existing preset "' + clean + '"?')) return;
+    savedPresets[existing] = { name: clean, state: snap };
+  } else {
+    savedPresets.push({ name: clean, state: snap });
+  }
+  savePresets();
+  state.activePreset = clean;
+  render();
+};
+document.getElementById('preset-clear').onclick = () => { clearAllFilters(); };
 document.getElementById('select-all').onchange    = (e) => {
   const vis = sorted(filtered());
   if (e.target.checked) vis.forEach(r => selectedIds.add(r._id));
@@ -2285,7 +2543,7 @@ function downloadCsv(filename, content) {
 }
 document.getElementById('export-all').onclick = () => {
   const cols = ['bucket','original_bucket','changed','reason','display_name','display_name_original',
-                'emails','mobile','website','linkedin_url','li_status',
+                'emails','mobile','website','linkedin_url','li_status','city',
                 'meeting_count','meeting_count_original',
                 'first_meeting_date','last_meeting_date','last_activity_date',
                 'last_activity_channel','stage','fit_score','archived','archive_reason',
@@ -2308,6 +2566,7 @@ document.getElementById('export-all').onclick = () => {
       website: getField(r, 'website'),
       linkedin_url: getField(r, 'linkedin_url'),
       li_status: getField(r, 'li_status'),
+      city: cityOf(r),
       meeting_count: meetingCount(r),
       meeting_count_original: r.meeting_count,
       first_meeting_date: r.first_meeting_date,
