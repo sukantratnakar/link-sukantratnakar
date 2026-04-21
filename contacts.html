@@ -82,6 +82,27 @@
   .pill .pill-x:hover { opacity: 1; background: var(--danger); color: #fff; }
   .pill.pill-new { color: var(--accent); border-style: dashed; border-color: var(--accent); }
   .pill.pill-new:hover { background: var(--accent); color: #fff; }
+  .pill .pill-edit { margin-left: 6px; opacity: 0.4; font-size: 10px; padding: 0 2px; cursor: pointer;
+                     border-radius: 2px; user-select: none; }
+  .pill .pill-edit:hover { opacity: 1; background: var(--border); color: var(--fg); }
+
+  /* Bucket groups */
+  .pill-group { display: flex; flex-direction: column; gap: 4px;
+                padding: 4px; border: 1px dashed #3a4453; border-radius: 10px;
+                background: rgba(255,255,255,0.02); }
+  .pill.pill-group-head { font-weight: 600; background: var(--panel);
+                          border-color: #4a5a6e; color: var(--fg); }
+  .pill.pill-group-head.on { background: var(--accent); color: var(--accent-fg);
+                             border-color: var(--accent); }
+  .pill.pill-group-head.on .count { color: var(--accent-fg); opacity: 0.8; }
+  .pill.pill-group-head .group-triangle { margin-right: 4px; font-size: 11px; opacity: 0.6; }
+  .pill-group-kids { display: flex; flex-wrap: wrap; gap: 4px; padding-left: 18px; }
+  .pill.pill-child { font-size: 10px; padding: 3px 8px; }
+  .pill.pill-addchild { font-style: italic; opacity: 0.6; border-style: dashed; }
+  .pill.pill-addchild:hover { opacity: 1; color: var(--accent); }
+
+  /* City save flash */
+  .city-input.city-saved { background: #2a5a3a; border-color: var(--success); transition: all 0.3s; }
 
   /* Batch pills - overlay tags (different from buckets).
      A contact keeps its bucket AND can be in multiple batches. */
@@ -714,6 +735,40 @@ const LS_ACTIONS         = 'systovation_actions_log_v1';
 const LS_QUEUE           = 'systovation_today_queue_v1';
 const LS_CUSTOM_BUCKETS  = 'systovation_custom_buckets_v1';
 const LS_BATCHES         = 'systovation_batches_v1';
+const LS_BUCKET_GROUPS   = 'systovation_bucket_groups_v1';
+const LS_BUCKET_LABELS   = 'systovation_bucket_labels_v1';
+
+/* Bucket groups — parent container for 1+ bucket keys.  Clicking a group header in the
+ * pill strip filters to rows in any of its child buckets.
+ * Schema: [ { name: 'Landing Bucket', keys: ['CA_Cohort', 'Publishing_Pipeline', 'Licensing_Pipeline'] } ] */
+let bucketGroups = [];
+try {
+  const raw = localStorage.getItem(LS_BUCKET_GROUPS);
+  if (raw) bucketGroups = JSON.parse(raw).filter(g => g && g.name && Array.isArray(g.keys));
+} catch (e) { bucketGroups = []; }
+
+/* Seed the Landing Bucket group on first run */
+if (bucketGroups.length === 0) {
+  bucketGroups = [{ name: 'Landing Bucket', keys: ['CA_Cohort', 'Publishing_Pipeline', 'Licensing_Pipeline'] }];
+  try { localStorage.setItem(LS_BUCKET_GROUPS, JSON.stringify(bucketGroups)); } catch (e) {}
+}
+function saveBucketGroups() { localStorage.setItem(LS_BUCKET_GROUPS, JSON.stringify(bucketGroups)); }
+function groupForBucketKey(key) {
+  return bucketGroups.find(g => g.keys.includes(key)) || null;
+}
+function keysInGroup(name) {
+  const g = bucketGroups.find(x => x.name === name);
+  return g ? g.keys : [];
+}
+
+/* Bucket-label overrides — lets the user rename any pill while the underlying key stays stable.
+ * Schema: { <bucket_key>: <display_label>, ... } */
+let bucketLabelOverrides = {};
+try {
+  const raw = localStorage.getItem(LS_BUCKET_LABELS);
+  if (raw) bucketLabelOverrides = JSON.parse(raw) || {};
+} catch (e) { bucketLabelOverrides = {}; }
+function saveBucketLabels() { localStorage.setItem(LS_BUCKET_LABELS, JSON.stringify(bucketLabelOverrides)); }
 
 /* Custom buckets persisted across sessions. Each entry: {key,label,color,custom:true}. */
 let customBuckets = [];
@@ -727,7 +782,10 @@ function saveCustomBuckets() {
 }
 function allBuckets() { return [...DEFAULT_BUCKETS, ...customBuckets]; }
 function findBucket(key) { return allBuckets().find(b => b.key === key); }
-function bucketLabel(key) { return findBucket(key)?.label || key; }
+function bucketLabel(key) {
+  if (bucketLabelOverrides[key]) return bucketLabelOverrides[key];
+  return findBucket(key)?.label || key;
+}
 function bucketColor(key) { return findBucket(key)?.color || 'var(--muted)'; }
 function bucketCss(key)   { return findBucket(key)?.css || ''; }
 
@@ -957,6 +1015,7 @@ let state = {
   tab: 'review',
   search: '',
   bucket: '',
+  bucketGroup: '',    /* when set, filter to rows whose bucket is any child of this group */
   tier: '',
   minMtg: 0,
   cadence: '',
@@ -1024,36 +1083,111 @@ function buildPills() {
   const bar = document.getElementById('bucket-pills');
   bar.innerHTML = '';
 
+  /* All */
   const all = document.createElement('div');
-  all.className = 'pill' + (state.bucket === '' ? ' on' : '');
+  all.className = 'pill' + (!state.bucket && !state.bucketGroup ? ' on' : '');
   all.innerHTML = '<span class="dot" style="background:var(--muted)"></span>All <span class="count">0</span>';
-  all.onclick = () => { state.bucket = ''; render(); };
+  all.onclick = () => { state.bucket = ''; state.bucketGroup = ''; render(); };
   bar.appendChild(all);
 
-  allBuckets().forEach(b => {
-    const p = document.createElement('div');
-    p.className = 'pill' + (state.bucket === b.key ? ' on' : '');
-    p.innerHTML = `<span class="dot" style="background:${b.color}"></span>${b.label} <span class="count">0</span>`;
-    p.onclick = () => { state.bucket = b.key; render(); };
-    if (b.custom) {
-      const x = document.createElement('span');
-      x.className = 'pill-x';
-      x.textContent = '\u2715';
-      x.title = 'Delete this custom bucket (rows go back to Needs_Review)';
-      x.onclick = (e) => {
-        e.stopPropagation();
-        const n = DATA.filter(r => getBucket(r) === b.key).length;
-        const msg = n > 0
-          ? `Delete "${b.label}"? ${n} row${n === 1 ? '' : 's'} will be moved to Needs_Review.`
-          : `Delete "${b.label}"?`;
-        if (confirm(msg)) { deleteCustomBucket(b.key); render(); }
-      };
-      p.appendChild(x);
-    }
+  /* Precompute per-bucket row counts (visible rows, ignoring the current bucket/group filter) */
+  const bucketCounts = {};
+  DATA.forEach(r => {
+    if (isMerged(r) && !state.showMerged) return;
+    const k = getBucket(r);
+    bucketCounts[k] = (bucketCounts[k] || 0) + 1;
+  });
+
+  /* Render each bucket group with its header + indented children */
+  bucketGroups.forEach(g => {
+    const section = document.createElement('div');
+    section.className = 'pill-group';
+
+    /* Group header — clickable */
+    const total = g.keys.reduce((acc, k) => acc + (bucketCounts[k] || 0), 0);
+    const head = document.createElement('div');
+    head.className = 'pill pill-group-head' + (state.bucketGroup === g.name ? ' on' : '');
+    head.innerHTML = '<span class="group-triangle">\u25BE</span>'
+                   + '<span class="group-name">' + escHtml(g.name) + '</span>'
+                   + ' <span class="count">' + total + '</span>';
+    head.title = 'Click to show all rows in this group (' + g.keys.map(k => bucketLabel(k)).join(', ') + ')';
+    head.onclick = () => {
+      state.bucket = '';
+      state.bucketGroup = (state.bucketGroup === g.name ? '' : g.name);
+      render();
+    };
+    /* rename group */
+    const renameG = document.createElement('span');
+    renameG.className = 'pill-edit';
+    renameG.textContent = '\u270E';
+    renameG.title = 'Rename this group';
+    renameG.onclick = (e) => {
+      e.stopPropagation();
+      const n = prompt('Rename group:', g.name);
+      if (!n || !n.trim() || n.trim() === g.name) return;
+      if (bucketGroups.some(x => x.name === n.trim())) { alert('A group named "' + n.trim() + '" already exists.'); return; }
+      if (state.bucketGroup === g.name) state.bucketGroup = n.trim();
+      g.name = n.trim();
+      saveBucketGroups();
+      render();
+    };
+    head.appendChild(renameG);
+    /* delete group */
+    const delG = document.createElement('span');
+    delG.className = 'pill-x';
+    delG.textContent = '\u2715';
+    delG.title = 'Delete this group (children return to ungrouped)';
+    delG.onclick = (e) => {
+      e.stopPropagation();
+      if (!confirm('Delete the "' + g.name + '" group? (The child buckets stay, just become ungrouped.)')) return;
+      bucketGroups = bucketGroups.filter(x => x.name !== g.name);
+      saveBucketGroups();
+      if (state.bucketGroup === g.name) state.bucketGroup = '';
+      render();
+    };
+    head.appendChild(delG);
+    section.appendChild(head);
+
+    /* Indented child pills */
+    const kids = document.createElement('div');
+    kids.className = 'pill-group-kids';
+    g.keys.forEach(k => {
+      const b = findBucket(k);
+      if (!b) return;
+      const p = buildBucketPill(b, bucketCounts[k] || 0, g);
+      p.classList.add('pill-child');
+      kids.appendChild(p);
+    });
+    /* "+ add child" on each group */
+    const addChild = document.createElement('span');
+    addChild.className = 'pill pill-child pill-addchild';
+    addChild.textContent = '+ add';
+    addChild.title = 'Add an existing bucket to this group';
+    addChild.onclick = () => {
+      const avail = allBuckets().filter(b => !g.keys.includes(b.key) && !groupForBucketKey(b.key));
+      if (avail.length === 0) { alert('No ungrouped buckets available to add.'); return; }
+      const names = avail.map((b, i) => (i + 1) + ') ' + bucketLabel(b.key)).join('\n');
+      const choice = prompt('Which bucket to add to "' + g.name + '"? Enter number:\n' + names, '1');
+      const idx = parseInt(choice, 10) - 1;
+      if (isNaN(idx) || idx < 0 || idx >= avail.length) return;
+      g.keys.push(avail[idx].key);
+      saveBucketGroups();
+      render();
+    };
+    kids.appendChild(addChild);
+    section.appendChild(kids);
+
+    bar.appendChild(section);
+  });
+
+  /* Render ungrouped buckets (flat, same row) */
+  const ungroupedBuckets = allBuckets().filter(b => !groupForBucketKey(b.key));
+  ungroupedBuckets.forEach(b => {
+    const p = buildBucketPill(b, bucketCounts[b.key] || 0, null);
     bar.appendChild(p);
   });
 
-  /* + New bucket pill */
+  /* + New bucket */
   const add = document.createElement('div');
   add.className = 'pill pill-new';
   add.innerHTML = '<span class="dot" style="background:var(--accent)"></span>+ New bucket';
@@ -1062,9 +1196,85 @@ function buildPills() {
     const name = prompt('Name the new bucket (e.g. Investors, Advisors, Alumni):', '');
     if (!name) return;
     const b = addCustomBucket(name);
-    if (b) { state.bucket = b.key; render(); }
+    if (b) { state.bucket = b.key; state.bucketGroup = ''; render(); }
   };
   bar.appendChild(add);
+
+  /* + New group */
+  const addG = document.createElement('div');
+  addG.className = 'pill pill-new';
+  addG.innerHTML = '<span class="dot" style="background:#7bb3f5"></span>+ New group';
+  addG.title = 'Group 2+ buckets under a named parent header';
+  addG.onclick = () => {
+    const name = prompt('Group name (e.g. "Landing Bucket", "Warm authors"):', '');
+    if (!name || !name.trim()) return;
+    if (bucketGroups.some(x => x.name === name.trim())) { alert('A group named "' + name.trim() + '" already exists.'); return; }
+    bucketGroups.push({ name: name.trim(), keys: [] });
+    saveBucketGroups();
+    render();
+  };
+  bar.appendChild(addG);
+}
+
+/* Helper used by buildPills — builds a single bucket pill with rename + delete actions. */
+function buildBucketPill(b, count, parentGroup) {
+  const p = document.createElement('div');
+  p.className = 'pill' + (state.bucket === b.key ? ' on' : '');
+  p.innerHTML = '<span class="dot" style="background:' + b.color + '"></span>'
+              + '<span class="pill-label">' + escHtml(bucketLabel(b.key)) + '</span>'
+              + ' <span class="count">' + count + '</span>';
+  p.onclick = () => { state.bucket = b.key; state.bucketGroup = ''; render(); };
+
+  /* Rename — works for every bucket (key stays fixed, label overrides in localStorage) */
+  const rn = document.createElement('span');
+  rn.className = 'pill-edit';
+  rn.textContent = '\u270E';
+  rn.title = 'Rename this bucket';
+  rn.onclick = (e) => {
+    e.stopPropagation();
+    const cur = bucketLabel(b.key);
+    const n = prompt('Rename "' + cur + '" to:', cur);
+    if (n === null) return;
+    const clean = n.trim();
+    if (!clean || clean === cur) return;
+    bucketLabelOverrides[b.key] = clean;
+    if (b.custom) { b.label = clean; saveCustomBuckets(); }
+    saveBucketLabels();
+    render();
+  };
+  p.appendChild(rn);
+
+  /* Remove-from-group (only when the pill is in a group) */
+  if (parentGroup) {
+    const pop = document.createElement('span');
+    pop.className = 'pill-edit';
+    pop.textContent = '\u21E1';
+    pop.title = 'Remove from "' + parentGroup.name + '" (bucket itself stays)';
+    pop.onclick = (e) => {
+      e.stopPropagation();
+      parentGroup.keys = parentGroup.keys.filter(k => k !== b.key);
+      saveBucketGroups();
+      render();
+    };
+    p.appendChild(pop);
+  }
+
+  if (b.custom) {
+    const x = document.createElement('span');
+    x.className = 'pill-x';
+    x.textContent = '\u2715';
+    x.title = 'Delete this custom bucket (rows go back to Needs_Review)';
+    x.onclick = (e) => {
+      e.stopPropagation();
+      const n = DATA.filter(r => getBucket(r) === b.key).length;
+      const msg = n > 0
+        ? 'Delete "' + bucketLabel(b.key) + '"? ' + n + ' row' + (n === 1 ? '' : 's') + ' will be moved to Needs_Review.'
+        : 'Delete "' + bucketLabel(b.key) + '"?';
+      if (confirm(msg)) { deleteCustomBucket(b.key); render(); }
+    };
+    p.appendChild(x);
+  }
+  return p;
 }
 
 function renderBatchPills() {
@@ -1247,6 +1457,10 @@ function filtered() {
     if (isMerged(r) && !state.showMerged) return false;
     const b = getBucket(r);
     if (state.bucket && b !== state.bucket) return false;
+    if (state.bucketGroup) {
+      const memberKeys = keysInGroup(state.bucketGroup);
+      if (!memberKeys.includes(b)) return false;
+    }
     if (state.tier && r.tier !== state.tier) return false;
     if (state.minMtg && meetingCount(r) < state.minMtg) return false;
     if (state.changedOnly && !isChanged(r)) return false;
@@ -1325,20 +1539,12 @@ function render() {
   renderPresetPills();
   const visible = sorted(filtered());
 
-  /* Pill counts (global) — All + every bucket; last pill is "+ New" (skipped). */
-  const counts = { '': DATA.length };
-  allBuckets().forEach(b => counts[b.key] = 0);
-  DATA.forEach(r => {
-    const k = getBucket(r);
-    if (k in counts) counts[k]++;
-    else counts[k] = 1;  /* covers rows whose custom bucket was deleted mid-session */
-  });
-  const keys = ['', ...allBuckets().map(b => b.key)];
-  document.querySelectorAll('#bucket-pills .pill').forEach((p, idx) => {
-    if (idx >= keys.length) return;  /* the trailing "+ New" pill has no count */
-    const span = p.querySelector('.count');
-    if (span) span.textContent = counts[keys[idx]] || 0;
-  });
+  /* Update the 'All' pill count (buildPills already populated per-bucket counts inline) */
+  const firstPill = document.querySelector('#bucket-pills > .pill');
+  if (firstPill) {
+    const span = firstPill.querySelector('.count');
+    if (span) span.textContent = DATA.filter(r => !(isMerged(r) && !state.showMerged)).length;
+  }
 
   /* Table body */
   const tbody = document.getElementById('tbody');
@@ -1651,19 +1857,33 @@ function renderRow(r, idx) {
   tdD.textContent = r.last_meeting_date || '';
   tr.appendChild(tdD);
 
-  /* City — editable, stored as override */
+  /* City — editable, stored as override. Auto-saves on blur or Enter with a green flash. */
   const tdCity = document.createElement('td');
   tdCity.className = 'city-cell';
   const cityIn = document.createElement('input');
   cityIn.type = 'text';
   cityIn.className = 'city-input';
   cityIn.value = cityOf(r);
-  cityIn.placeholder = '-';
-  cityIn.onblur = () => {
+  cityIn.placeholder = 'city\u2026';
+  cityIn.title = 'Type a city and press Enter or click away \u2014 saves automatically.';
+  const flashCity = () => {
+    cityIn.classList.add('city-saved');
+    setTimeout(() => cityIn.classList.remove('city-saved'), 800);
+  };
+  let cityLastSaved = cityOf(r);
+  const saveCity = (rerender) => {
     const v = cityIn.value.trim();
+    if (v === cityLastSaved) return;
     setField(r, 'city', v);
+    cityLastSaved = v;
+    flashCity();
     refreshCityList();
-    render();
+    if (rerender) render();
+  };
+  cityIn.onblur    = () => saveCity(true);
+  cityIn.onkeydown = (e) => {
+    if (e.key === 'Enter') { e.preventDefault(); saveCity(false); cityIn.blur(); }
+    else if (e.key === 'Escape') { cityIn.value = cityLastSaved; cityIn.blur(); }
   };
   cityIn.onclick = (e) => e.stopPropagation();
   tdCity.appendChild(cityIn);
