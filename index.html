@@ -112,6 +112,25 @@
   .empty-row td{padding:40px;text-align:center;color:var(--muted)}
   footer{padding:20px;text-align:center;color:var(--muted);font-size:11px}
 
+  /* One-click action icons inline with the Name cell */
+  .row-actions{display:inline-flex;gap:4px;margin-left:8px;vertical-align:middle}
+  .row-actions a{
+    display:inline-flex;align-items:center;justify-content:center;
+    width:22px;height:22px;border-radius:4px;
+    background:#eef2f8;border:1px solid #d8e0ed;
+    color:#1f4e78;text-decoration:none;font-size:11px;font-weight:600;
+    transition:.12s;line-height:1;
+  }
+  .row-actions a:hover{background:#1f4e78;border-color:#1f4e78;color:#fff;transform:translateY(-1px)}
+  .row-actions a.li{background:#e7f0f7;border-color:#c8dbeb}
+  .row-actions a.li:hover{background:#0a66c2;border-color:#0a66c2}
+  .row-actions a.em{background:#f1ece5;border-color:#e4d9c5}
+  .row-actions a.em:hover{background:#7a5a1a;border-color:#7a5a1a}
+  .row-actions a.fi{background:#eaf1ea;border-color:#cfe0cf}
+  .row-actions a.fi:hover{background:#2f7d3b;border-color:#2f7d3b}
+  .row-actions a.disabled{background:#f4f5f7;border-color:#e3e7f1;color:#bcc4d3;cursor:not-allowed;pointer-events:none}
+  .row-actions svg{width:12px;height:12px;display:block}
+
   @media (max-width: 960px){
     .kpis,.alerts{grid-template-columns:repeat(2,1fr)}
     .charts{grid-template-columns:1fr}
@@ -508,7 +527,7 @@ function renderTable(){
     const fitClass = r._fit ? `fit-${r._fit}` : 'fit-u';
     const fitLabel = r._fit || '?';
     tr.innerHTML = `
-      <td><strong>${esc(r['Full Name']||'—')}</strong><div style="color:var(--muted);font-size:11px">${esc(r['Headline']||'')}</div></td>
+      <td><strong>${esc(r['Full Name']||'—')}</strong>${actionIcons(r)}<div style="color:var(--muted);font-size:11px">${esc(r['Headline']||'')}</div></td>
       <td>${esc(r['Company']||'—')}<div style="color:var(--muted);font-size:11px">${esc(r['Location']||'')}</div></td>
       <td><span class="stage-pill ${stageClass}">${esc(r['Stage']||'—')}</span></td>
       <td>${r._lastActivityStr}</td>
@@ -516,10 +535,64 @@ function renderTable(){
       <td><span class="fit-dot ${fitClass}">${fitLabel}</span></td>
       <td style="max-width:260px;color:var(--muted)">${esc(nextStep(r))}</td>
     `;
+    // Stop the row's click-to-expand from firing when an icon link is clicked
+    tr.querySelectorAll('.row-actions a').forEach(a => {
+      a.addEventListener('click', e => e.stopPropagation());
+    });
     tr.addEventListener('click', () => toggleDetail(tr, r));
     tbody.appendChild(tr);
   });
 }
+
+// Build the inline action icons (LinkedIn, Email, Contact file).
+// Renders disabled placeholder when data isn't present, so the row layout stays consistent.
+function actionIcons(r){
+  const liUrl = r['LinkedIn URL'];
+  const email = r['Email'];
+  const file  = r['Contact File'];
+
+  const liIcon = `<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M4.98 3.5C4.98 4.88 3.87 6 2.5 6S0 4.88 0 3.5 1.12 1 2.5 1s2.48 1.12 2.48 2.5zM.22 8h4.56v14H.22V8zm7.66 0h4.37v1.92h.06c.61-1.15 2.1-2.36 4.33-2.36 4.63 0 5.48 3.05 5.48 7.01V22h-4.56v-6.21c0-1.48-.03-3.38-2.06-3.38-2.06 0-2.38 1.61-2.38 3.27V22H7.88V8z"/></svg>`;
+  const emIcon = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M3 6l9 7 9-7"/></svg>`;
+  const fiIcon = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg>`;
+
+  // LinkedIn — open profile/conversation in new tab
+  const liHtml = liUrl
+    ? `<a class="li" href="${esc(liUrl)}" target="_blank" rel="noopener" title="Open LinkedIn profile / message">${liIcon}</a>`
+    : `<a class="li disabled" title="No LinkedIn URL on file">${liIcon}</a>`;
+
+  // Email — mailto with prefilled subject
+  const subject = encodeURIComponent(`Re: ${r['Full Name']||''}`);
+  const emHtml = email
+    ? `<a class="em" href="mailto:${esc(email)}?subject=${subject}" title="Email ${esc(email)}">${emIcon}</a>`
+    : `<a class="em disabled" title="No email on file">${emIcon}</a>`;
+
+  // Contact file — uses copy-to-clipboard since browsers block direct file:// links from https pages.
+  // Falls back to showing the path on hover.
+  const fileHtml = file
+    ? `<a class="fi" href="#" onclick="copyPath(event,'${esc(file).replace(/'/g,"\\'")}')" title="Copy local file path: ${esc(file)}">${fiIcon}</a>`
+    : `<a class="fi disabled" title="No contact file path">${fiIcon}</a>`;
+
+  return `<span class="row-actions">${liHtml}${emHtml}${fileHtml}</span>`;
+}
+
+// Copy the absolute Mac path of the contact file to clipboard.
+window.copyPath = function(e, relPath){
+  e.preventDefault();
+  e.stopPropagation();
+  const base = '/Users/sukantratnakar/Documents/Claude/Projects/Systovation LinkedIn Outreach/';
+  const abs = base + relPath;
+  navigator.clipboard.writeText(abs).then(() => {
+    const a = e.currentTarget;
+    const orig = a.title;
+    a.title = 'Copied! ' + abs;
+    a.style.background = '#2f7d3b';
+    a.style.borderColor = '#2f7d3b';
+    a.style.color = '#fff';
+    setTimeout(() => { a.title = orig; a.style.background=''; a.style.borderColor=''; a.style.color=''; }, 1400);
+  }).catch(() => {
+    prompt('Copy this path:', abs);
+  });
+};
 
 function nextStep(r){
   if (!r._active) return `Archived${r['Archive Reason']?' · '+r['Archive Reason']:''}`;
